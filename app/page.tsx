@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Lead = {
   id: number;
@@ -39,22 +39,59 @@ const niches = [
 
 export default function Home() {
   const [leads, setLeads] = useState(initialLeads);
+  const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
   const [filter, setFilter] = useState("All leads");
   const [query, setQuery] = useState("");
   const [scanning, setScanning] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState("");
+  const leadsPanelRef = useRef<HTMLElement>(null);
+  const queueRef = useRef<HTMLElement>(null);
 
-  const visible = useMemo(() => leads.filter((lead) => {
-    const matchesFilter = filter === "All leads" || lead.status === filter;
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("signalmerch-saved-leads");
+      if (stored) setSavedLeads(JSON.parse(stored) as Lead[]);
+    } catch {
+      // Keep the app usable if browser storage is unavailable or malformed.
+    }
+  }, []);
+
+  function persistSaved(next: Lead[]) {
+    setSavedLeads(next);
+    try {
+      window.localStorage.setItem("signalmerch-saved-leads", JSON.stringify(next));
+    } catch {
+      // Saving for this session still works when browser storage is unavailable.
+    }
+  }
+
+  const visible = useMemo(() => (filter === "Saved" ? savedLeads : leads).filter((lead) => {
+    const matchesFilter = filter === "All leads" || filter === "Saved" || lead.status === filter;
     const haystack = `${lead.name} ${lead.city} ${lead.category} ${lead.trigger}`.toLowerCase();
     return matchesFilter && haystack.includes(query.toLowerCase());
-  }), [leads, filter, query]);
+  }), [leads, savedLeads, filter, query]);
 
   function updateStatus(id: number, status: Lead["status"]) {
     setLeads((current) => current.map((lead) => lead.id === id ? { ...lead, status } : lead));
+    if (status === "Saved") {
+      const lead = leads.find((item) => item.id === id) ?? savedLeads.find((item) => item.id === id);
+      if (lead && !savedLeads.some((item) => item.id === id)) persistSaved([{ ...lead, status }, ...savedLeads]);
+    } else {
+      persistSaved(savedLeads.map((lead) => lead.id === id ? { ...lead, status } : lead));
+    }
     setToast(status === "Contacted" ? "Marked as contacted" : "Lead saved to your queue");
     window.setTimeout(() => setToast(""), 1800);
+  }
+
+  function showLeadView(nextFilter: string) {
+    setFilter(nextFilter);
+    leadsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function contactSearchUrl(lead: Lead) {
+    const queryText = `${lead.name} ${lead.city} official website contact`;
+    return `https://www.google.com/search?q=${encodeURIComponent(queryText)}`;
   }
 
   async function runScan() {
@@ -78,10 +115,10 @@ export default function Home() {
       <aside className="sidebar">
         <div className="brand"><span className="brandmark">S</span><span>SignalMerch</span></div>
         <nav aria-label="Primary navigation">
-          <button className="nav active"><span>◈</span> Discovery</button>
-          <button className="nav"><span>◎</span> Saved leads <b>12</b></button>
-          <button className="nav"><span>↗</span> Outreach</button>
-          <button className="nav"><span>⌁</span> Search queue</button>
+          <button className={`nav ${filter === "All leads" ? "active" : ""}`} onClick={() => showLeadView("All leads")}><span>◈</span> Discovery</button>
+          <button className={`nav ${filter === "Saved" ? "active" : ""}`} onClick={() => showLeadView("Saved")}><span>◎</span> Saved leads <b>{savedLeads.length}</b></button>
+          <button className={`nav ${filter === "Contacted" ? "active" : ""}`} onClick={() => showLeadView("Contacted")}><span>↗</span> Outreach</button>
+          <button className="nav" onClick={() => queueRef.current?.scrollIntoView({ behavior: "smooth" })}><span>⌁</span> Search queue</button>
         </nav>
         <div className="sidebar-bottom">
           <div className="usage"><div><span>Monthly scans</span><strong>64%</strong></div><i><em /></i><small>1,280 of 2,000 searches</small></div>
@@ -103,9 +140,9 @@ export default function Home() {
           <div><span>Sources monitored</span><strong>42</strong><small className="live">● All systems live</small></div>
         </div>
 
-        <section className="panel leads-panel">
+        <section className="panel leads-panel" ref={leadsPanelRef}>
           <div className="panel-head">
-            <div><h2>Fresh opportunities</h2><p>Ranked by timing, headcount and likelihood to buy.</p></div>
+            <div><h2>{filter === "Saved" ? "Saved leads" : filter === "Contacted" ? "Outreach" : "Fresh opportunities"}</h2><p>{filter === "Saved" ? "Your shortlist, saved on this device." : filter === "Contacted" ? "Leads you have marked as contacted." : "Ranked by timing, headcount and likelihood to buy."}</p></div>
             <div className="search"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search leads" aria-label="Search leads" /></div>
           </div>
           <div className="filters">
@@ -122,14 +159,14 @@ export default function Home() {
                   <p className="why">{lead.why}</p>
                   <p className="source"><span>↗</span> {lead.sourceUrl ? <a href={lead.sourceUrl} target="_blank" rel="noreferrer">{lead.source}</a> : lead.source}</p>
                 </div>
-                <div className="lead-action"><span>EST. VALUE</span><strong>{lead.est}</strong><div><button className="ghost" onClick={() => updateStatus(lead.id, "Saved")}>{lead.status === "Saved" ? "✓ Saved" : "＋ Save"}</button><button className="arrow" onClick={() => updateStatus(lead.id, "Contacted")} aria-label={`Mark ${lead.name} contacted`}>→</button></div></div>
+                <div className="lead-action"><span>EST. VALUE</span><strong>{lead.est}</strong><div className="action-row">{lead.sourceUrl && <a className="lead-link secondary" href={lead.sourceUrl} target="_blank" rel="noreferrer">View source</a>}<a className="lead-link" href={contactSearchUrl(lead)} target="_blank" rel="noreferrer" onClick={() => updateStatus(lead.id, "Contacted")}>Find contact</a></div><button className="ghost save-button" onClick={() => updateStatus(lead.id, "Saved")}>{savedLeads.some((item) => item.id === lead.id) ? "✓ Saved" : "＋ Save lead"}</button></div>
               </article>
             ))}
             {visible.length === 0 && <div className="empty">No leads match that search.</div>}
           </div>
         </section>
 
-        <section className="queue-section">
+        <section className="queue-section" ref={queueRef}>
           <div className="queue-heading"><div><p className="eyebrow">SEARCH STRATEGY</p><h2>Your SoCal opportunity queue</h2><p>Eight niches chosen for urgency, staff count and repeat order potential.</p></div><button>Manage queue →</button></div>
           <div className="niche-grid">{niches.map(([name, detail, tag], index) => <article key={name}><div className={`niche-icon c${index}`}>{["↻", "◒", "P", "✦", "↗", "♫", "⌂", "A"][index]}</div><div><h3>{name}</h3><p>{detail}</p><span>{tag}</span></div><label><input type="checkbox" defaultChecked /><i /></label></article>)}</div>
         </section>
