@@ -13,6 +13,7 @@ type Lead = {
   when: string;
   est: string;
   source: string;
+  sourceUrl?: string;
   status: "New" | "Saved" | "Contacted";
 };
 
@@ -56,13 +57,20 @@ export default function Home() {
     window.setTimeout(() => setToast(""), 1800);
   }
 
-  function runScan() {
+  async function runScan() {
     setScanning(true);
-    window.setTimeout(() => {
+    try {
+      const response = await fetch("/api/search", { cache: "no-store" });
+      const data = await response.json() as { leads?: Lead[]; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Search failed");
+      setLeads(data.leads ?? []);
+      setToast(`Scan complete · ${data.leads?.length ?? 0} live signals found`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Search failed");
+    } finally {
       setScanning(false);
-      setToast("Scan complete · 6 qualified leads found");
-      window.setTimeout(() => setToast(""), 2200);
-    }, 1200);
+      window.setTimeout(() => setToast(""), 3200);
+    }
   }
 
   return (
@@ -112,7 +120,7 @@ export default function Home() {
                   <div className="lead-title"><h3>{lead.name}</h3><span className="trigger">{lead.trigger}</span></div>
                   <p className="meta">{lead.category} <i>·</i> {lead.city} <i>·</i> {lead.when}</p>
                   <p className="why">{lead.why}</p>
-                  <p className="source"><span>↗</span> {lead.source}</p>
+                  <p className="source"><span>↗</span> {lead.sourceUrl ? <a href={lead.sourceUrl} target="_blank" rel="noreferrer">{lead.source}</a> : lead.source}</p>
                 </div>
                 <div className="lead-action"><span>EST. VALUE</span><strong>{lead.est}</strong><div><button className="ghost" onClick={() => updateStatus(lead.id, "Saved")}>{lead.status === "Saved" ? "✓ Saved" : "＋ Save"}</button><button className="arrow" onClick={() => updateStatus(lead.id, "Contacted")} aria-label={`Mark ${lead.name} contacted`}>→</button></div></div>
               </article>
@@ -127,7 +135,7 @@ export default function Home() {
         </section>
       </section>
 
-      {showSettings && <div className="modal-backdrop" onMouseDown={() => setShowSettings(false)}><section className="modal" onMouseDown={(e) => e.stopPropagation()}><button className="close" onClick={() => setShowSettings(false)}>×</button><p className="eyebrow">CONNECTION</p><h2>Connect your search API</h2><p>Use Firecrawl, Tavily, Serper or another web-search provider. Your key should be stored as a private hosted secret—not exposed in the browser.</p><label>Provider<select defaultValue="Firecrawl"><option>Firecrawl</option><option>Tavily</option><option>Serper</option><option>Custom endpoint</option></select></label><label>API key<input type="password" placeholder="••••••••••••••••••••" /></label><label>Search region<input defaultValue="Orange, Los Angeles, Riverside, San Bernardino & San Diego counties" /></label><button className="scan" onClick={() => { setShowSettings(false); setToast("Connection settings saved"); window.setTimeout(() => setToast(""), 1800); }}>Save connection</button><small>Production note: connect this field to a server-side secret before running live searches.</small></section></div>}
+      {showSettings && <div className="modal-backdrop" onMouseDown={() => setShowSettings(false)}><section className="modal" onMouseDown={(e) => e.stopPropagation()}><button className="close" onClick={() => setShowSettings(false)}>×</button><p className="eyebrow">CONNECTION</p><h2>Search API connected</h2><p>SignalMerch uses SerpApi to discover fresh Southern California news signals.</p><label>Provider<input value="SerpApi" readOnly /></label><label>Search region<input value="Orange, Los Angeles, Riverside, San Bernardino & San Diego counties" readOnly /></label><button className="scan" onClick={() => setShowSettings(false)}>Done</button><small>Your API key is stored privately on the server and is never sent to the browser.</small></section></div>}
       {toast && <div className="toast">✓ {toast}</div>}
     </main>
   );
