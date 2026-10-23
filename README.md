@@ -1,100 +1,89 @@
-# vinext-starter
+# SignalMerch
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+SignalMerch is a portfolio-stage lead-discovery application for promotional-products and branded-apparel teams. It turns timely Southern California business and event signals into a reviewable opportunity queue.
 
-## Prerequisites
+## Business Problem
 
-- Node.js `>=22.13.0`
+Merchandise sellers often learn about openings, acquisitions, tournaments, festivals, and growth events after buyers have already selected a vendor. Manually monitoring local news is slow, inconsistent, and difficult to turn into a repeatable sales workflow.
 
-## Quick Start
+## Solution
+
+SignalMerch runs a targeted Google News search through SerpApi, converts recent results into structured opportunities, assigns a transparent rule-based fit score, and gives a user lightweight saved/contacted workflow tools. Demo records keep the interface explorable without an API key; live scans require a user-provided SerpApi credential.
+
+## Technical Implementation
+
+- Next.js 16, React 19, TypeScript, and CSS
+- vinext/Vite build targeting a Cloudflare-compatible runtime
+- Server-side SerpApi request so the credential is never exposed to the browser
+- Client-side filtering and localStorage persistence for saved leads
+- Source and contact-research links for human verification
+- Node test runner and ESLint for basic verification
+
+```text
+Browser UI -> /api/search -> SerpApi Google News results
+     |                            |
+     +-> filters/status           +-> normalized lead records
+     +-> localStorage shortlist   +-> source URLs for review
+```
+
+## Business Value
+
+The prototype demonstrates how a marketing or sales team could reduce manual monitoring, prioritize time-sensitive triggers, and create a consistent research-to-outreach handoff. Any revenue or pipeline impact would need to be measured in a real deployment.
+
+## My Role
+
+The project owner defined the business problem, target signals, Southern California search strategy, qualification workflow, and desired user experience. The application was implemented and iterated with AI-assisted development tools, with the owner directing requirements, testing behavior, and integration choices. This repository does not claim that every line was independently hand-coded without AI assistance.
+
+## Verified Results
+
+- The application builds successfully with the documented toolchain.
+- Live search code calls SerpApi only from the server route.
+- Saved-lead state persists locally in the browser.
+- Source and contact-research actions are implemented.
+- Dashboard quantities and dollar figures shown in the seeded UI are illustrative demo data, not measured business outcomes.
+
+## Setup
+
+Prerequisites: Node.js 22.13 or later and a SerpApi key for live discovery.
 
 ```bash
 npm install
+cp .env.example .env.local
+# Replace the placeholder in .env.local with your own key.
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Open the local URL printed by the development server. Without `SERPAPI_KEY`, the interface remains usable with demo records, while a scan returns a configuration message.
 
-## Included Shape
+## Commands
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+npm run dev      # local development
+npm run build    # production build
+npm test         # build and smoke tests
+npm run lint     # static analysis
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+## Environment
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SERPAPI_KEY` | Live scans only | Server-side access to SerpApi search results |
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+Never commit a populated environment file. `.env.example` contains a placeholder only.
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+## Demo and Screenshots
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+Run `npm run dev` to explore the seeded interface. For a portfolio walkthrough, show the opportunity feed, run a live scan with your own key, save a lead, and use the source/contact actions while explaining that every result requires human qualification.
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+## Known Limitations
 
-## Useful Commands
+- Rule-based scoring is a prioritization aid, not an AI prediction or proof of purchase intent.
+- Live discovery currently uses one fixed Southern California news query.
+- Saved state is device-local; there is no shared account database.
+- Contact discovery opens a search rather than enriching or emailing a person automatically.
+- Seeded companies, usage counts, pipeline values, and performance deltas are demo content.
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+## Project Status
 
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Portfolio prototype. Suitable for demonstrating workflow design and API integration, but not presented as a production sales system.

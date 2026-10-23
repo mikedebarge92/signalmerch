@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type Lead = {
   id: number;
@@ -39,7 +39,15 @@ const niches = [
 
 export default function Home() {
   const [leads, setLeads] = useState(initialLeads);
-  const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
+  const [savedLeads, setSavedLeads] = useState<Lead[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = window.localStorage.getItem("signalmerch-saved-leads");
+      return stored ? JSON.parse(stored) as Lead[] : [];
+    } catch {
+      return [];
+    }
+  });
   const [filter, setFilter] = useState("All leads");
   const [query, setQuery] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -47,15 +55,6 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const leadsPanelRef = useRef<HTMLElement>(null);
   const queueRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem("signalmerch-saved-leads");
-      if (stored) setSavedLeads(JSON.parse(stored) as Lead[]);
-    } catch {
-      // Keep the app usable if browser storage is unavailable or malformed.
-    }
-  }, []);
 
   function persistSaved(next: Lead[]) {
     setSavedLeads(next);
